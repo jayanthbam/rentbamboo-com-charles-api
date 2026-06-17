@@ -1000,7 +1000,7 @@ YOUR TASK: Generate the next reply based on the importance order above.`,
 				pp.Printf("\x1b[33mFailed to send AI reply telemetry: %v\x1b[0m\n", err)
 			}
 		}()
-		return fallbackResponse, propertyCtx, nil
+		return fallbackResponse, systemPrompt, nil
 	}
 
 	type AIResponse struct {
@@ -1017,7 +1017,7 @@ YOUR TASK: Generate the next reply based on the importance order above.`,
 				pp.Printf("\x1b[33mFailed to send AI reply telemetry: %v\x1b[0m\n", err)
 			}
 		}()
-		return fallbackResponse, propertyCtx, nil
+		return fallbackResponse, systemPrompt, nil
 	}
 
 	req := openai.ChatCompletionRequest{
@@ -1048,7 +1048,7 @@ YOUR TASK: Generate the next reply based on the importance order above.`,
 				pp.Printf("\x1b[33mFailed to send AI reply telemetry: %v\x1b[0m\n", err)
 			}
 		}()
-		return fallbackResponse, propertyCtx, nil
+		return fallbackResponse, systemPrompt, nil
 	}
 
 	// Parse response
@@ -1065,7 +1065,7 @@ YOUR TASK: Generate the next reply based on the importance order above.`,
 					pp.Printf("\x1b[33mFailed to send AI reply telemetry: %v\x1b[0m\n", err)
 				}
 			}()
-			return fallbackResponse, propertyCtx, nil
+			return fallbackResponse, systemPrompt, nil
 		}
 		responseText = aiResponse.Response
 	} else {
@@ -1116,7 +1116,7 @@ YOUR TASK: Generate the next reply based on the importance order above.`,
 		}
 	}()
 
-	return responseText, propertyCtx, nil
+	return responseText, systemPrompt, nil
 }
 
 // GetLastSystemPrompt returns the last built system prompt (for test tool display).

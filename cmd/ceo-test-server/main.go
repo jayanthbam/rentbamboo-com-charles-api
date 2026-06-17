@@ -31,6 +31,7 @@ type Server struct {
 	mongoClient *mongo.Client
 	gen         *generator.AIGenerator
 	secret      string
+	debug       bool // when true, logs full prompt + reply + reasoning to stdout
 }
 
 func main() {
@@ -63,10 +64,16 @@ func main() {
 		log.Printf("⚠️  INTERNAL_SECRET not set — using insecure default (DO NOT USE IN PRODUCTION)")
 	}
 
+	debug := os.Getenv("DEBUG_CEO_TEST") == "true"
+	if debug {
+		log.Printf("🔍 DEBUG_CEO_TEST=true — full prompts will be logged")
+	}
+
 	srv := &Server{
 		mongoClient: client,
 		gen:         gen,
 		secret:      secret,
+		debug:       debug,
 	}
 
 	mux := http.NewServeMux()
@@ -268,15 +275,24 @@ func (s *Server) handleTestSend(w http.ResponseWriter, r *http.Request) {
 	// Build thread
 	thread := buildChatThread(chat)
 
+	if s.debug {
+		log.Printf("📨 [DEBUG] INBOUND from %s (sendAsHuman=%v, %d chars): %q", req.Phone, req.SendAsHuman, len(req.Message), req.Message)
+		log.Printf("💬 [DEBUG] CHAT THREAD (%d chars):\n%s", len(thread), thread)
+	}
+
 	// Look up feature flags
 	appSending, tourScheduling := s.getCmdCenterFlags(ctx, req.TeamID)
-
-	// Generate AI reply
-	start := time.Now()
 	leadPropertyID := lead.Property.ID
 	if leadPropertyID == "" {
 		leadPropertyID = lead.PropertyID
 	}
+
+	if s.debug {
+		log.Printf("⚙️  [DEBUG] CMD-CENTER FLAGS: appSending=%v tourScheduling=%v leadPropertyID=%q", appSending, tourScheduling, leadPropertyID)
+	}
+
+	// Generate AI reply
+	start := time.Now()
 	aiReply, systemPrompt, err := s.gen.GenerateLiveTextResponse(
 		thread, req.Message, req.TeamID, "ceo-test-"+uuid.NewString(),
 		leadPropertyID, appSending, tourScheduling, lead, "", "",
@@ -287,14 +303,21 @@ func (s *Server) handleTestSend(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Capture reasoning content (DeepSeek's thinking before the reply)
+	reasoningContent := s.gen.GetLastReasoningContent()
+
+	if s.debug {
+		log.Printf("✅ [DEBUG] AI REPLY (%d chars, %dms):\n%s", len(aiReply), latency.Milliseconds(), aiReply)
+		log.Printf("📋 [DEBUG] FULL SYSTEM PROMPT (%d chars):\n%s", len(systemPrompt), systemPrompt)
+		if reasoningContent != "" {
+			log.Printf("🧠 [DEBUG] REASONING CONTENT (%d chars):\n%s", len(reasoningContent), reasoningContent)
+		}
+	}
+
 	// Save AI reply
 	if err := s.saveMessage(ctx, teamPhone, req.Phone, aiReply, "outbound", ""); err != nil {
 		log.Printf("⚠️ Failed to save outbound AI message: %v", err)
 	}
-
-	// Capture the model's reasoning content (DeepSeek's thinking
-	// before the visible reply). May be empty for older models.
-	reasoningContent := s.gen.GetLastReasoningContent()
 
 	writeJSON(w, http.StatusOK, SendResponse{
 		Reply:            aiReply,
