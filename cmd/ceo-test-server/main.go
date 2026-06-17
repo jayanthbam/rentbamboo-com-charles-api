@@ -142,10 +142,11 @@ type SendRequest struct {
 }
 
 type SendResponse struct {
-	Reply        string `json:"reply"`
-	SystemPrompt string `json:"systemPrompt"`
-	LatencyMs    int64  `json:"latencyMs"`
-	TokensUsed   int    `json:"tokensUsed"`
+	Reply            string `json:"reply"`
+	SystemPrompt     string `json:"systemPrompt"`
+	ReasoningContent string `json:"reasoningContent"`
+	LatencyMs        int64  `json:"latencyMs"`
+	TokensUsed       int    `json:"tokensUsed"`
 }
 
 type ResetRequest struct {
@@ -291,10 +292,15 @@ func (s *Server) handleTestSend(w http.ResponseWriter, r *http.Request) {
 		log.Printf("⚠️ Failed to save outbound AI message: %v", err)
 	}
 
+	// Capture the model's reasoning content (DeepSeek's thinking
+	// before the visible reply). May be empty for older models.
+	reasoningContent := s.gen.GetLastReasoningContent()
+
 	writeJSON(w, http.StatusOK, SendResponse{
-		Reply:        aiReply,
-		SystemPrompt: systemPrompt,
-		LatencyMs:    latency.Milliseconds(),
+		Reply:            aiReply,
+		SystemPrompt:     systemPrompt,
+		ReasoningContent: reasoningContent,
+		LatencyMs:        latency.Milliseconds(),
 	})
 }
 
