@@ -275,7 +275,35 @@ The lead has at least one tour scheduled. Times are in the team's local timezone
 	if cfg.TourScheduling && cfg.ScheduleURL != "" {
 		b.WriteString(`10. If the lead asks for a photo, video, floor plan, virtual tour, or any visual of the property -> redirect them to the TOUR_LINK and tell them photos/floor plan are available there. Do NOT describe the property visually in text. Just point them to the tour link.
 
-11. Don't spam the tour link. While qualifying (not yet fully qualified), mention the TOUR_LINK at most once or twice across the whole conversation — NOT on every reply. After the lead has already seen the link (or has a tour scheduled — see TOUR HISTORY above), do NOT re-push the tour link unless the lead explicitly asks about touring or you have new information (e.g. a new unit became available). The lead's patience is more important than a booking. `)
+`)
+	}
+
+	// Conditional rule 11 (anti-spam). Renders only if:
+	//   - There's a pushable link (tour OR app), AND
+	//   - The lead isn't in "jobs done" mode (qualified + tour scheduled).
+	// When the lead is qualified with a tour scheduled, the AI is in
+	// "be of property help" mode, not pushing mode — rule 11 is skipped.
+	// Renders one of 3 versions based on which push channels are enabled:
+	// tour only, app only, or both.
+	hasTourLink := cfg.TourScheduling && cfg.ScheduleURL != ""
+	hasAppLink := cfg.AppSending && cfg.AppURL != ""
+	jobsDone := cfg.IsFullyQualified && cfg.ToursScheduled != ""
+	if (hasTourLink || hasAppLink) && !jobsDone {
+		tourBookedClause := "After the lead has already been sent the tour link (or has a tour scheduled — see TOUR HISTORY above), do NOT re-push the tour link unless the lead explicitly asks about touring or you have new information (e.g. a new unit became available)."
+		appSubmittedClause := "After the lead has already applied (Status: Application — see LEAD_CONTEXT) or has a tour scheduled, do NOT re-push the application link unless the lead explicitly asks or you have new information."
+		var rule11 string
+		switch {
+		case hasTourLink && hasAppLink:
+			rule11 = "11. Don't spam the tour or application links. While qualifying (not yet fully qualified), mention each link at most once or twice across the whole conversation — NOT on every reply. " +
+				tourBookedClause + " " + appSubmittedClause + " The lead's patience is more important than a booking.\n\n"
+		case hasTourLink:
+			rule11 = "11. Don't spam the tour link. While qualifying (not yet fully qualified), mention the TOUR_LINK at most once or twice across the whole conversation — NOT on every reply. " +
+				tourBookedClause + " The lead's patience is more important than a booking.\n\n"
+		case hasAppLink:
+			rule11 = "11. Don't spam the application link. While qualifying (not yet fully qualified), mention the APPLICATION_LINK at most once or twice across the whole conversation — NOT on every reply. " +
+				appSubmittedClause + " The lead's patience is more important than a booking.\n\n"
+		}
+		b.WriteString(rule11)
 	}
 
 	// ─ Section 1: LEAD_CONTEXT ────────────────────────────────────────────
@@ -393,8 +421,10 @@ The lead has at least one tour scheduled. Times are in the team's local timezone
 
 	// ─ Section 3: CAPABILITIES ────────────────────────────────────────────
 	b.WriteString("═════════════\n3. CAPABILITIES\n═════════════\n")
-	hasTourLink := cfg.TourScheduling && cfg.ScheduleURL != ""
-	hasAppLink := cfg.AppSending && cfg.AppURL != ""
+	// hasTourLink / hasAppLink are declared in the rule 11 block above
+	// (reused here to avoid duplicate declaration).
+	hasTourLink = cfg.TourScheduling && cfg.ScheduleURL != ""
+	hasAppLink = cfg.AppSending && cfg.AppURL != ""
 
 	if hasTourLink {
 		b.WriteString("- TOUR_SENDING: ON — use the TOUR_TIMES + TOUR_LINK for scheduling.\n")
