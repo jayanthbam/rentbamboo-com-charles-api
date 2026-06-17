@@ -1,0 +1,10 @@
+
+env.sh
+.env
+.env.local
+.DS_Store
+scripts
+curl -X POST http:::localhost:8080:e:ema
+bash
+.claude/
+.opencode/
