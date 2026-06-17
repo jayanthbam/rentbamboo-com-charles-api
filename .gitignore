@@ -8,3 +8,4 @@ curl -X POST http:::localhost:8080:e:ema
 bash
 .claude/
 .opencode/
+.env
