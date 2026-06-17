@@ -121,11 +121,16 @@ func BuildSystemPrompt(cfg PromptConfig) string {
 	var b strings.Builder
 
 	// ─ Conditional goal hierarchy + target wording ──
-	// When the lead is fully qualified, swap to "PUSH for tour / close-out"
-	// mode. Otherwise, default to "qualify first" mode.
-	goalHierarchy := "qualify first, push for a tour once qualified or showing interest, and only mention applications after a tour is scheduled or when specifically asked."
-	yourTarget := "First qualify the lead. If all questions are answered, reply based on the importance order below."
-	importanceLine6 := "6. ASK_NEXT (unanswered — pick 1-2 to weave into your reply when needed)"
+	// Default mode (not fully qualified): PUSH for a tour first — the
+	// booking is the goal. Qualify lightly along the way (at most 1
+	// question per message). The CEO's feedback is clear: leads don't
+	// want 3-4 questions before a tour link, they want the tour link
+	// fast and the team can finish qualifying later.
+	// When the lead IS fully qualified, swap to "PUSH for tour / close-out"
+	// or "be of help" mode (see below).
+	goalHierarchy := "PUSH for a tour first — the booking is the goal. Qualify lightly along the way (at most 1 question per message). Don't ask 2-3 questions before showing the tour link — the team's booking goal matters more than collecting every answer. Only mention applications after a tour is scheduled or when specifically asked."
+	yourTarget := "Push for a tour. Weave at most 1 question from ASK_NEXT if natural. The tour link is the primary push."
+	importanceLine6 := "6. ASK_NEXT (unanswered — weave 0-1 if natural; the tour link is the primary push)"
 	if cfg.IsFullyQualified {
 		// Sub-conditions within fully-qualified:
 		//   - Tour already scheduled → "be of help" mode (no pushing)
@@ -256,7 +261,7 @@ The lead has at least one tour scheduled. Times are in the team's local timezone
 0. STRICT_RULES
 ═════════════
 1. Facts from LEAD_CONTEXT and PROPERTY_CONTEXT only. Old convos may be stale.
-2. If a question should be asked, you can ask up to 2 at once.
+2. If a question should be asked, ask AT MOST 1 per message. Asking multiple questions in one SMS overwhelms the lead. Better to ask one, get a reply, then ask the next.
 3. Greetings -> greet back. No pitch, no questions.
 4. Lead wants to tour -> Check CAPABILITIES.
 5. Lead asks to apply -> Check CAPABILITIES.
@@ -289,22 +294,27 @@ The lead has at least one tour scheduled. Times are in the team's local timezone
 	hasAppLink := cfg.AppSending && cfg.AppURL != ""
 	jobsDone := cfg.IsFullyQualified && cfg.ToursScheduled != ""
 	if (hasTourLink || hasAppLink) && !jobsDone {
-		tourBookedClause := "After the lead has already been sent the tour link (or has a tour scheduled — see TOUR HISTORY above), do NOT re-push the tour link unless the lead explicitly asks about touring or you have new information (e.g. a new unit became available)."
-		appSubmittedClause := "After the lead has already applied (Status: Application — see LEAD_CONTEXT) or has a tour scheduled, do NOT re-push the application link unless the lead explicitly asks or you have new information."
 		var rule11 string
 		switch {
 		case hasTourLink && hasAppLink:
-			rule11 = "11. Don't spam the tour or application links. While qualifying (not yet fully qualified), mention each link at most once or twice across the whole conversation — NOT on every reply. " +
-				tourBookedClause + " " + appSubmittedClause + " The lead's patience is more important than a booking.\n\n"
+			rule11 = "11. Aim for 1-2 link mentions per 3-4 of your messages history (tour OR application) — pushy but not spammy. While qualifying, both links are primary call-to-actions. When answering questions, you can mention the link as a self-service portal where the lead can browse all units, pictures, and book or apply at their own pace. The lead's patience is more important than a booking.\n\n"
 		case hasTourLink:
-			rule11 = "11. Don't spam the tour link. While qualifying (not yet fully qualified), mention the TOUR_LINK at most once or twice across the whole conversation — NOT on every reply. " +
-				tourBookedClause + " The lead's patience is more important than a booking.\n\n"
+			rule11 = "11. Aim for 1-2 tour-link mentions per 3-4 of your messages history — pushy but not spammy. While qualifying, the TOUR_LINK is the primary call-to-action. When answering unit/pricing/location questions, you can mention the link as a self-service portal where the lead can browse all units, pictures, and book at their own pace. The lead's patience is more important than a booking.\n\n"
 		case hasAppLink:
-			rule11 = "11. Don't spam the application link. While qualifying (not yet fully qualified), mention the APPLICATION_LINK at most once or twice across the whole conversation — NOT on every reply. " +
-				appSubmittedClause + " The lead's patience is more important than a booking.\n\n"
+			rule11 = "11. Aim for 1-2 application-link mentions per 3-4 of your messages history — pushy but not spammy. While qualifying, the APPLICATION_LINK is the primary call-to-action. When answering unit/pricing questions, you can mention the link as a self-service portal where the lead can apply and choose their unit of choice. The lead's patience is more important than a booking.\n\n"
 		}
 		b.WriteString(rule11)
 	}
+
+	// ─ Section 0 (continued): STRICT_RULE 12 — Emoji limit ────────────────
+	// Always renders (not conditional). The CEO's feedback: the AI was
+	// using 1-2 emojis in every reply, which is too "saccharine" for
+	// regular SMS. New rule: aim for 0 emojis, max 1, and only when the
+	// lead's tone is clearly positive. Self-regulating: check the last
+	// 2-3 of your own messages before adding one.
+	b.WriteString(`12. Aim for 0 emojis in every reply. Use at most 1 emoji, and ONLY when the lead's tone is clearly positive/happy. Before using an emoji, check your last 2-3 messages: if ANY of them had an emoji, skip emojis this time. If NONE of the last 3-4 had an emoji, you may add one (max 1) if the mood warrants it. This is SMS — keep it regular text.
+
+`)
 
 	// ─ Section 1: LEAD_CONTEXT ────────────────────────────────────────────
 	var leadLines []string
@@ -523,10 +533,10 @@ The lead has at least one tour scheduled. Times are in the team's local timezone
 	b.WriteString("FINAL: Getting them through the door is more important than answering every question.\n")
 
 	if cfg.TourScheduling {
-		b.WriteString("PUSH BALANCE: push for a tour AND weave 1-2 questions from ASK_NEXT into the same message. ONLY DO IT IF IT MAKES SENSE NATURALLY. \n")
+		b.WriteString("PUSH BALANCE: push for the tour link, weave 0-1 questions from ASK_NEXT (often 0). The tour is the primary goal. Only mention applications after a tour is scheduled or when specifically asked.\n")
 	}
 	if cfg.AppSending {
-		b.WriteString("PUSH BALANCE: push for an application AND weave 1-2 questions from ASK_NEXT into the same message. ONLY DO IT IF IT MAKES SENSE NATURALLY.\n")
+		b.WriteString("PUSH BALANCE: push for an application AND weave 0-1 questions from ASK_NEXT (often 0). The application is the primary goal after a tour is scheduled or when the lead is clearly interested.\n")
 	}
 
 	return b.String()
